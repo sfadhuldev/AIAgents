@@ -159,7 +159,7 @@ YOUR WORKFLOW:
    - feels_like
    - humidity
    - wind_speed
-   4. Never calculate or convert temperature units yourself.
+4. Never calculate or convert temperature units yourself.
    Always trust the values returned by the tool.
 
 5. If the tool returns an error, explain it politely.
