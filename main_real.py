@@ -42,7 +42,10 @@ def get_location():
 
 
 def get_weather(city: str = ""):
-    """Get weather for a given city. If city is empty, use user's current location coordinates."""
+    """Get weather for a given city.
+    Return Fahrenheit for US, Liberia, Myanmar/Burma.
+    Return Celsius for all other countries.
+    """
 
     api_key = os.getenv("OPENWEATHER_API_KEY")
 
@@ -50,9 +53,9 @@ def get_weather(city: str = ""):
         return {"error": "OPENWEATHER_API_KEY is missing from the .env file"}
 
     base_url = "https://api.openweathermap.org/data/2.5/weather"
+    fahrenheit_countries = {"US", "LR", "MM"}
 
     try:
-        # If Ollama sends empty city, use coordinates
         if not city or city.strip() == "":
             location_data = get_user_location_data()
 
@@ -83,7 +86,6 @@ def get_weather(city: str = ""):
         else:
             city = city.strip()
 
-            # Fix Bahrain small-area issue
             if "Tūblī" in city or "Tubli" in city:
                 city = "Manama,BH"
 
@@ -92,8 +94,6 @@ def get_weather(city: str = ""):
                 "appid": api_key,
                 "units": "metric"
             }
-
-        print("Weather params:", params)
 
         response = requests.get(base_url, params=params, timeout=10)
         data = response.json()
@@ -104,11 +104,25 @@ def get_weather(city: str = ""):
                 "params_used": params
             }
 
+        country = data["sys"]["country"]
+
+        if country in fahrenheit_countries:
+            params["units"] = "imperial"
+            response = requests.get(base_url, params=params, timeout=10)
+            data = response.json()
+            unit = "°F"
+        else:
+            unit = "°C"
+
         return {
             "city": data["name"],
             "country": data["sys"]["country"],
-            "temperature_celsius": data["main"]["temp"],
-            "condition": data["weather"][0]["description"]
+            "temperature": round(data["main"]["temp"], 1),
+            "unit": unit,
+            "condition": data["weather"][0]["description"],
+            "feels_like": round(data["main"]["feels_like"], 1),
+            "humidity": data["main"]["humidity"],
+            "wind_speed": data["wind"]["speed"]
         }
 
     except requests.exceptions.RequestException as e:
@@ -125,20 +139,38 @@ ollama = ChatOllama(
     temperature=0.7,
 )
 
-
 system_prompt = """
-You are a helpful weather assistant.
+You are a professional weather assistant.
 
 YOUR WORKFLOW:
-1. If the user asks about weather WITHOUT specifying a location:
-   - Call get_weather with an empty city string.
 
-2. If the user provides a city:
-   - Call get_weather(city) directly.
+1. If the user asks about the weather without specifying a location:
+   - Call get_weather("").
 
-3. The weather tool returns temperature in Celsius.
+2. If the user specifies a city or location:
+   - Call get_weather(city).
 
-4. Answer in a short, clear sentence.
+3. The get_weather tool already returns:
+   - city
+   - country
+   - temperature
+   - unit
+   - condition
+   - feels_like
+   - humidity
+   - wind_speed
+   4. Never calculate or convert temperature units yourself.
+   Always trust the values returned by the tool.
+
+5. If the tool returns an error, explain it politely.
+
+6. Answer naturally in this style:
+
+The current weather in {city}, {country} is {condition} with a temperature of {temperature}{unit}. It feels like {feels_like}{unit}, the humidity is {humidity}%, and the wind speed is {wind_speed} m/s.
+
+7. Keep the response concise, professional, and natural.
+
+8. Never mention tools, APIs, parameters, JSON, or internal workflow.
 """
 
 
